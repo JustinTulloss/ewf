@@ -30,5 +30,5 @@ You should also set `FIREBASE_URL` to your production Firebase URL.
 #### Docker deployment
 
 - Build the docker image with `docker build . -t <your tag>`
-- Run the docker image with `docker run --env FIREBASE_URL=<YOUR FIREBASE URL> --env REDIS_PORT_6379_TCP_ADDR=<YOUR REDIS SERVER ADDRESS> --env REDIS_PORT_6379_TCP_PORT=<YOUR REDIS PORT> <your tag>
+- Run the docker image with `docker run --env FIREBASE_URL=<YOUR FIREBASE URL> --env REDIS_PORT_6379_TCP_ADDR=<YOUR REDIS SERVER ADDRESS> --env REDIS_PORT_6379_TCP_PORT=<YOUR REDIS PORT> <your tag>`
   - Alternatively, you can pass `--link <your redis container>:redis` to `run` and all the environment variables for redis will be filled out. You still need to pass in the Firebase url however.
