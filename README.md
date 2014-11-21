@@ -5,11 +5,11 @@ Firebase -> Redis translator.
 
 ## Usage
 
-- Client subscribes to a firebase path by subscribing to that path on Redis
-  - EX: `SUBSCRIBE my/data`
-- Client publishes the firebase path as a string to the 'firebase-subscriptions' channel on redis
+- Client subscribes to a firebase path by subscribing to the path/event on Redis
+  - EX: `SUBSCRIBE child_added:my/data`
+- Client publishes the firebase path as a string to the `firebase-<event>` channel on redis
   - This informs the daemon that it should subscribe to updates from firebase
-  - EX: `PUBLISH firebase-subscriptions my/data`
+  - EX: `PUBLISH firebase-child-changed my/data`
 - The client will then receive the current value as JSON published to the path
 - On any update to the value, the client will receive the value as JSON published to the path
 
