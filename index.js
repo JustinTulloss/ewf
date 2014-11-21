@@ -7,19 +7,14 @@ var redisConfig = {
 };
 
 var fbUrl = process.env.FIREBASE_URL;
-var firebase = new Firebase(fbUrl);
-var subscribeClient = redis.createClient(redisConfig.port, redisConfig.host);
-var publishClient = redis.createClient(redisConfig.port, redisConfig.host);
+var firebase;
+var subscribeClient;
+var publishClient;
 
 var SUBSCRIPTION_CHANNEL = 'firebase-subscriptions';
 
-subscribeClient.on('error', function (err) {
-  console.error("[redis subscribe client] " + err);
-});
-
-publishClient.on('error', function (err) {
-  console.error("[redis publish client] " + err);
-});
+// The set of current subscribed paths
+var subscriptions = {};
 
 function path(fbRef) {
   return decodeURIComponent(fbRef.toString().replace(fbUrl, ''));
@@ -31,7 +26,10 @@ function onChange(ds) {
 }
 
 function subscribe(path) {
-  firebase.child(path).on('value', onChange);
+  if (!subscriptions[path]) {
+    firebase.child(path).on('value', onChange);
+    subscriptions[path] = true;
+  }
 }
 
 function listenForSubscriptions() {
@@ -45,4 +43,33 @@ function listenForSubscriptions() {
   });
 }
 
-listenForSubscriptions();
+var usage = "usage: node index.js\n\n\
+Environment variables to define:\n \
+\t- FIREBASE_URL\tThe URL to your firebase instance (required)\n \
+\t- REDIS_PORT_6379_TCP_PORT\tThe port to find the redis instance on \
+(defaults to 6379)\n \
+\t- REDIS_PORT_6379_TCP_ADDR\tThe address to find Redis at \
+(defaults to localhost)\n";
+
+function main(argv) {
+  var wantsHelp = argv.indexOf('-h') !== -1 || argv.indexOf('--help') !== -1;
+  if (!fbUrl || wantsHelp) {
+    console.log(usage);
+    process.exit(wantsHelp ? 0 : 1);
+  }
+  firebase = new Firebase(fbUrl);
+  subscribeClient = redis.createClient(redisConfig.port, redisConfig.host);
+  publishClient = redis.createClient(redisConfig.port, redisConfig.host);
+
+  subscribeClient.on('error', function (err) {
+    console.error("[redis subscribe client] " + err);
+  });
+
+  publishClient.on('error', function (err) {
+    console.error("[redis publish client] " + err);
+  });
+
+  listenForSubscriptions();
+}
+
+main(process.argv);
