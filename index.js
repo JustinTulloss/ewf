@@ -11,35 +11,51 @@ var firebase;
 var subscribeClient;
 var publishClient;
 
-var SUBSCRIPTION_CHANNEL = 'firebase-subscriptions';
+var redisToEvent = {
+  'firebase-value': 'value',
+  'firebase-child-added': 'child_added',
+  'firebase-child-changed': 'child_changed',
+  'firebase-child-removed': 'child_removed',
+};
 
 // The set of current subscribed paths
 var subscriptions = {};
+for (var channel in redisToEvent) {
+  subscriptions[redisToEvent[channel]] = {};
+}
 
 function path(fbRef) {
   return decodeURIComponent(fbRef.toString().replace(fbUrl, ''));
 }
 
-function onChange(ds) {
+function onChange(event, ds) {
   console.info('[firebase] change occurred', path(ds.ref()));
-  publishClient.publish(path(ds.ref()), JSON.stringify(ds.val()));
+  publishClient.publish(event + ':' + path(ds.ref()), JSON.stringify(ds.val()));
 }
 
-function subscribe(path) {
-  if (!subscriptions[path]) {
-    firebase.child(path).on('value', onChange);
-    subscriptions[path] = true;
+var handlers = {};
+for (var channel in redisToEvent) {
+  var event = redisToEvent[channel];
+  handlers[event] = onChange.bind(null, event);
+}
+
+function subscribe(event, path) {
+  if (!subscriptions[event][path]) {
+    console.info('[redis subscribe client] Subscribing to ' + event + ' at ' + path);
+    firebase.child(path).on(event, handlers[event]);
+    subscriptions[event][path] = true;
   }
 }
 
 function listenForSubscriptions() {
-  subscribeClient.subscribe(SUBSCRIPTION_CHANNEL);
+  for (var channel in redisToEvent) {
+    subscribeClient.subscribe(channel);
+  }
   subscribeClient.on('message', function(channel, message) {
-    if (channel !== SUBSCRIPTION_CHANNEL) {
+    if (!redisToEvent[channel]) {
       throw new Error("Got message on unknown channel " + channel);
     }
-    console.info('[redis subscribe client] Subscribing to ' + message);
-    subscribe(message);
+    subscribe(redisToEvent[channel], message);
   });
 }
 
