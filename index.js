@@ -11,18 +11,11 @@ var firebase;
 var subscribeClient;
 var publishClient;
 
-var redisToEvent = {
-  'firebase-value': 'value',
-  'firebase-child-added': 'child_added',
-  'firebase-child-changed': 'child_changed',
-  'firebase-child-removed': 'child_removed',
-};
+var ACTION_CHANNEL = 'firebase.action';
+var EVENT_CHANNEL = 'firebase.event';
 
 // The set of current subscribed paths
 var subscriptions = {};
-for (var channel in redisToEvent) {
-  subscriptions[redisToEvent[channel]] = {};
-}
 
 function path(fbRef) {
   return decodeURIComponent(fbRef.toString().replace(fbUrl, ''));
@@ -34,28 +27,48 @@ function onChange(event, ds) {
 }
 
 var handlers = {};
-for (var channel in redisToEvent) {
-  var event = redisToEvent[channel];
-  handlers[event] = onChange.bind(null, event);
-}
-
 function subscribe(event, path) {
+  subscriptions[event] = subscriptions[event] || {};
   if (!subscriptions[event][path]) {
     console.info('[redis subscribe client] Subscribing to ' + event + ' at ' + path);
+    handlers[event] = onChange.bind(null, event);
     firebase.child(path).on(event, handlers[event]);
-    subscriptions[event][path] = true;
+    subscriptions[event][path] = 1;
+  } else {
+    subscriptions[event][path]++;
   }
+}
+
+function writeToFirebase(args) {
+  var path = args.path;
+  if (!args.path) {
+    throw new Error("A path was not defined for firebase operation:", args);
+  }
+  var method = args.method;
+  if (!args.method) {
+    throw new Error("A method was not defined for firebase operation:", args);
+  }
+  var ref = firebase.child(path);
+  if (!ref[method]) {
+    throw new Error("Method %s does not exist!", method);
+  }
+  ref[method].apply(ref, args.arguments);
 }
 
 function listenForSubscriptions() {
-  for (var channel in redisToEvent) {
-    subscribeClient.subscribe(channel);
-  }
-  subscribeClient.on('message', function(channel, message) {
-    if (!redisToEvent[channel]) {
-      throw new Error("Got message on unknown channel " + channel);
+  subscribeClient.subscribe(ACTION_CHANNEL, EVENT_CHANNEL);
+  subscribeClient.on('message', function(channel, payload) {
+    var msg = JSON.parse(payload);
+    switch (channel) {
+      case ACTION_CHANNEL:
+        writeToFirebase(msg);
+        break;
+      case EVENT_CHANNEL:
+        subscribe(msg.event, msg.path);
+        break;
+      default:
+        console.error("Received message on unknown channel:", channel);
     }
-    subscribe(redisToEvent[channel], message);
   });
 }
 
